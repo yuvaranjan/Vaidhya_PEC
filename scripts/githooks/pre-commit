@@ -1,0 +1,23 @@
+#!/usr/bin/env sh
+# Project Vaidhya — pre-commit.
+#
+# Two jobs, both about keeping the shared documents true:
+#   1. regenerate PROGRESS.md and include it in this commit
+#   2. fail the commit if SETUP.md has drifted from the code
+#
+# Installed by `npm run setup` (git config core.hooksPath scripts/githooks).
+# Genuinely need to bypass it? `git commit --no-verify`.
+
+set -e
+
+command -v node >/dev/null 2>&1 || exit 0   # no node, nothing to check
+
+node scripts/update-progress.mjs >/dev/null
+git add PROGRESS.md
+
+if ! node scripts/check-setup.mjs; then
+  echo ""
+  echo "Commit blocked: SETUP.md is out of step with the code."
+  echo "Fix the items above, or commit with --no-verify if you know what you're doing."
+  exit 1
+fi

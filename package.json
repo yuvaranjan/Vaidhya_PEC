@@ -1,0 +1,26 @@
+{
+  "name": "vaidhya",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Project Vaidhya - edge-AI rural telemedicine. Monorepo root.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "start": "powershell -NoProfile -ExecutionPolicy Bypass -File ./start.ps1",
+    "setup": "npm install && node scripts/install-git-hooks.mjs && node scripts/update-progress.mjs",
+    "dev": "npm run dev --workspace web",
+    "build": "npm run build --workspace web",
+    "lint": "npm run lint --workspace web",
+    "progress": "node scripts/update-progress.mjs",
+    "check": "node scripts/update-progress.mjs --check && node scripts/check-setup.mjs",
+    "prepare": "node scripts/install-git-hooks.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "next": "^15.5.23"
+  }
+}

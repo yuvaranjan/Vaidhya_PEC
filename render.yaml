@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: vaidhya-edge-ai
+    env: python
+    region: oregon
+    buildCommand: pip install -r services/edge-ai/requirements.txt
+    startCommand: cd services/edge-ai && uvicorn main:app --host 0.0.0.0 --port $PORT
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: JURISDICTION_ID
+        value: jur_thrissur_01
+      - key: WEB_ORIGIN
+        value: https://vaidhya-ies.vercel.app
+      - key: STT_PROVIDER
+        value: groq
+      - key: TTS_PROVIDER
+        value: edge_tts
+      - key: TRANSLATE_PROVIDER
+        value: bank
+      - key: EDGE_LLM_PROVIDER
+        value: groq
+      - key: EDGE_LLM_FALLBACK
+        value: groq
+      - key: GROQ_STT_MODEL
+        value: whisper-large-v3-turbo
+      - key: GROQ_FALLBACK_MODEL
+        value: llama-3.3-70b-versatile

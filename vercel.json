@@ -1,0 +1,28 @@
+{
+  "services": {
+    "frontend": {
+      "root": "apps/web",
+      "framework": "nextjs"
+    },
+    "edge-ai": {
+      "root": "services/edge-ai",
+      "entrypoint": "main:app"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/edge-ai(/.*)?",
+      "destination": {
+        "type": "service",
+        "service": "edge-ai"
+      }
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "type": "service",
+        "service": "frontend"
+      }
+    }
+  ]
+}

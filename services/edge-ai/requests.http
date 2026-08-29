@@ -1,0 +1,81 @@
+### Project Vaidhya — edge-ai smoke tests (T1)
+### VS Code REST Client / JetBrains HTTP Client. T1 never opens a browser.
+
+@base = http://localhost:8000
+@visit = visit_demo_001
+
+### health — must be green before anything else matters
+GET {{base}}/health
+
+### 1. start a session
+POST {{base}}/session/start
+Content-Type: application/json
+
+{
+  "visit_id": "{{visit}}",
+  "patient_id": "pat_001",
+  "language": "ml"
+}
+
+### 2. pass-one vitals (the five the nurse enters)
+POST {{base}}/vitals
+Content-Type: application/json
+
+{
+  "visit_id": "{{visit}}",
+  "phase": "pass_one_baseline",
+  "readings": [
+    { "type": "temperature",      "value_numeric": 38.1 },
+    { "type": "blood_pressure",   "value_text": "118/76" },
+    { "type": "pulse",            "value_numeric": 96 },
+    { "type": "spo2",             "value_numeric": 97 },
+    { "type": "respiratory_rate", "value_numeric": 18 }
+  ]
+}
+
+### 3. one conversational turn
+### Definition of done: a Malayalam audio file in, Malayalam bot audio out,
+### plus an English transcript.
+POST {{base}}/voice/turn
+Content-Type: multipart/form-data; boundary=----vaidhya
+
+------vaidhya
+Content-Disposition: form-data; name="visit_id"
+
+{{visit}}
+------vaidhya
+Content-Disposition: form-data; name="audio"; filename="turn.webm"
+Content-Type: audio/webm
+
+< ./samples/malayalam_turn.webm
+------vaidhya--
+
+### 4. poll state — this is where the nurse-finding machine resolves
+GET {{base}}/session/{{visit}}/state
+
+### 5. nurse answers the pending finding
+POST {{base}}/vitals
+Content-Type: application/json
+
+{
+  "visit_id": "{{visit}}",
+  "phase": "on_demand",
+  "readings": [
+    { "type": "rebound_tenderness", "value_text": "true" }
+  ]
+}
+
+### 6. finish — writes to Supabase AND publishes vaidhya/queue/new
+POST {{base}}/intake/complete
+Content-Type: application/json
+
+{ "visit_id": "{{visit}}" }
+
+### 7. doctor question without a broker (test convenience only)
+POST {{base}}/consult/ask
+Content-Type: application/json
+
+{
+  "visit_id": "{{visit}}",
+  "question_en": "Does the pain get worse after eating?"
+}

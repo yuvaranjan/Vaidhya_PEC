@@ -1,0 +1,54 @@
+﻿# --- secrets ---
+.env
+.env.local
+.env.*.local
+!.env.example
+!.env.local.example
+
+# --- node ---
+node_modules/
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+.eslintcache
+
+# --- python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# --- edge runtime artifacts ---
+services/edge-ai/edge.db*
+services/edge-ai/audio_tmp/
+*.sqlite
+*.sqlite3
+
+# --- models (never commit weights) ---
+models/
+*.gguf
+*.safetensors
+
+# --- claude code ---
+# .claude/settings.json IS committed â€” it carries the team's hooks.
+.claude/settings.local.json
+
+# --- os / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.vercel
+
+# root level edge artifacts
+/edge.db*
+/audio_tmp/
+

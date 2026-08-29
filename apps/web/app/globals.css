@@ -1,0 +1,160 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+/*
+ * Cure Cloud & Vaidhya Healthcare Design System
+ * Specification: design_description.md
+ */
+
+@theme {
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  
+  --color-background: #FBFCFD;
+  --color-foreground: #173449;
+  
+  --color-card: #FFFFFF;
+  --color-card-foreground: #173449;
+  
+  --color-primary: #173F59;
+  --color-primary-foreground: #FFFFFF;
+  --color-primary-50: #f0f7f9;
+  --color-primary-100: #e2f0f4;
+  --color-primary-200: #c5e1e9;
+  --color-primary-300: #98c9d7;
+  --color-primary-400: #64aac0;
+  --color-primary-500: #418ea7;
+  --color-primary-600: #2b7088;
+  --color-primary-700: #173f59;
+  --color-primary-800: #102d40;
+  --color-primary-900: #0c202e;
+  
+  --color-secondary: #EEF6F6;
+  --color-secondary-foreground: #173F59;
+  
+  --color-muted: #F4F7F8;
+  --color-muted-foreground: #6D7F8C;
+  
+  --color-accent: #2B9C95;
+  --color-accent-foreground: #FFFFFF;
+  --color-accent-50: #f2faf9;
+  --color-accent-100: #e5f5f3;
+  --color-accent-200: #ccebe7;
+  --color-accent-300: #a3ddd5;
+  --color-accent-400: #70c6bc;
+  --color-accent-500: #2b9c95;
+  --color-accent-600: #1f7d77;
+  --color-accent-700: #14736a;
+  
+  --color-destructive: #DC4D57;
+  --color-destructive-foreground: #FFFFFF;
+  
+  --color-border: #DCE7EA;
+  --color-ring: #2B9C95;
+  --color-input: #F7FAFB;
+
+  --color-sidebar: #FFFFFF;
+  --color-sidebar-foreground: #607482;
+  --color-sidebar-primary: #E8F4F3;
+  --color-sidebar-primary-foreground: #173F59;
+  --color-sidebar-accent: #F4F8F8;
+
+  /* Legacy aliases for backwards compatibility */
+  --color-bg: #FBFCFD;
+  --color-text: #173449;
+  --color-surface: #FFFFFF;
+  --color-danger: #DC4D57;
+  --color-warn: #E8A33D;
+}
+
+html, body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+/* Custom Navy-tinted soft shadows */
+.shadow-soft {
+  box-shadow: 0 5px 18px rgba(15, 45, 64, 0.045);
+}
+
+.shadow-card-hover {
+  box-shadow: 0 8px 25px rgba(15, 45, 64, 0.08);
+}
+
+.shadow-popover {
+  box-shadow: 0 10px 30px rgba(15, 45, 64, 0.12);
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #DCE7EA;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #B5CBD1;
+}
+
+/* Print Stylesheet for High-DPI Physical Prescription */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 15mm 20mm 15mm 20mm;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 12pt !important;
+    line-height: 1.4 !important;
+  }
+
+  .no-print,
+  nav,
+  header,
+  aside,
+  button:not(.allow-print) {
+    display: none !important;
+  }
+
+  #printable-prescription {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  #printable-prescription table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  #printable-prescription th,
+  #printable-prescription td {
+    border: 1px solid #dce7ea !important;
+    padding: 6px 10px !important;
+  }
+
+  #printable-prescription th {
+    background-color: #f4f7f8 !important;
+    color: #173449 !important;
+  }
+}
