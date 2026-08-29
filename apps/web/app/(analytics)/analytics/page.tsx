@@ -1,10 +1,13 @@
 import { db } from "@/lib/db";
 import { generateMockAnalyticsRows, CaseRow } from "@/lib/mockAnalytics";
-import { AnalyticsDashboard } from "@/components/AnalyticsDashboard";
+import { getDistrictSummaries } from "@/data/districts";
+import { AnalyticsViewHub } from "@/components/AnalyticsViewHub";
 
 export const revalidate = 0;
 
 export default async function AnalyticsDashboardPage() {
+  const districts = await getDistrictSummaries();
+
   let rows: CaseRow[] = [];
   let isMock = false;
 
@@ -30,5 +33,6 @@ export default async function AnalyticsDashboardPage() {
     rows = generateMockAnalyticsRows();
   }
 
-  return <AnalyticsDashboard rows={rows} isMock={isMock} />;
+  return <AnalyticsViewHub districts={districts} rows={rows} isMock={isMock} />;
 }
+

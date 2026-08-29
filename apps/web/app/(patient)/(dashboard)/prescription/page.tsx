@@ -32,7 +32,7 @@ async function loadPrescription(
     const completedVisit = queue.find(v => v.status === "completed" && v.prescription && v.prescription.length > 0);
     if (completedVisit && completedVisit.prescription) {
       return {
-        prescription_id: mock_rx_,
+        prescription_id: "mock_rx_1",
         medications: completedVisit.prescription,
       };
     }
