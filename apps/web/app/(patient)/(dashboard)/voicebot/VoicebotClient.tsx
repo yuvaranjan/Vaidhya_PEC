@@ -4,23 +4,23 @@ import { useState, useRef, useEffect } from "react";
 import { edgeApi, USE_MOCK_AI } from "@/lib/edgeApi";
 import { WebRtcConsultHub } from "@/components/WebRtcConsultHub";
 import type { Language, IntakeCompleteResponse, PendingFinding, ModelsResponse, HealthResponse, VitalReadingInput } from "@vaidhya/shared";
-import { 
-  Sparkles, 
-  Mic, 
-  Square, 
-  Send, 
-  Globe, 
-  AlertCircle, 
-  CheckCircle2, 
-  Volume2, 
-  Bot, 
-  User, 
-  Activity, 
-  FileCheck, 
-  RefreshCw, 
-  Wifi, 
-  WifiOff, 
-  Cpu, 
+import {
+  Sparkles,
+  Mic,
+  Square,
+  Send,
+  Globe,
+  AlertCircle,
+  CheckCircle2,
+  Volume2,
+  Bot,
+  User,
+  Activity,
+  FileCheck,
+  RefreshCw,
+  Wifi,
+  WifiOff,
+  Cpu,
   Stethoscope,
   Thermometer,
   Heart,
@@ -28,7 +28,8 @@ import {
   ShieldCheck,
   ArrowRight,
   Camera,
-  X
+  X,
+  Usb
 } from "lucide-react";
 
 type Turn = {
@@ -60,15 +61,15 @@ export function VoicebotClient({
   const [vitalsSubmitted, setVitalsSubmitted] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [nurseError, setNurseError] = useState<string | null>(null);
-  
+
   const [textInput, setTextInput] = useState("");
   const [transcript, setTranscript] = useState<Turn[]>([]);
-  
+
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
-  
+
   const [pendingFinding, setPendingFinding] = useState<PendingFinding | null>(null);
   const [intakeResult, setIntakeResult] = useState<IntakeCompleteResponse | null>(null);
   const [currentlyPlayingUrl, setCurrentlyPlayingUrl] = useState<string | null>(null);
@@ -91,6 +92,135 @@ export function VoicebotClient({
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const recordTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastDoctorQuestionId = useRef<string | null>(null);
+
+  const [isUsbConnecting, setIsUsbConnecting] = useState(false);
+  const [usbConnected, setUsbConnected] = useState(false);
+  const [isMeasuring, setIsMeasuring] = useState(false);
+  const isMeasuringRef = useRef<boolean>(false);
+  const [timeLeft, setTimeLeft] = useState(20);
+  const [measureProgress, setMeasureProgress] = useState(0);
+  const [liveHr, setLiveHr] = useState<number | null>(null);
+  const [liveSpo2, setLiveSpo2] = useState<number | null>(null);
+  const [liveTemp, setLiveTemp] = useState<number | null>(null);
+
+  const hrSamples = useRef<number[]>([]);
+  const spo2Samples = useRef<number[]>([]);
+  const lastTempRef = useRef<number | null>(null);
+
+  const startMeasurement = () => {
+    setIsMeasuring(true);
+    isMeasuringRef.current = true;
+    setTimeLeft(30);
+    setMeasureProgress(0);
+    setLiveHr(null);
+    setLiveSpo2(null);
+    setLiveTemp(null);
+    hrSamples.current = [];
+    spo2Samples.current = [];
+
+    let elapsed = 0;
+    const interval = setInterval(() => {
+      elapsed += 1;
+      setTimeLeft(30 - elapsed);
+      setMeasureProgress((elapsed / 30) * 100);
+
+      if (elapsed >= 30) {
+        clearInterval(interval);
+
+        setIsMeasuring(false);
+        isMeasuringRef.current = false;
+
+        // Average HR (excluding 0)
+        const validHr = hrSamples.current.filter(v => v > 0);
+        if (validHr.length > 0) {
+          const avgHr = Math.round(validHr.reduce((a, b) => a + b, 0) / validHr.length);
+          const el = document.getElementById("pulse") as HTMLInputElement;
+          if (el) el.value = avgHr.toString();
+        }
+
+        // Average SpO2 (excluding 0)
+        const validSpo2 = spo2Samples.current.filter(v => v > 0);
+        if (validSpo2.length > 0) {
+          const avgSpo2 = Math.round(validSpo2.reduce((a, b) => a + b, 0) / validSpo2.length);
+          const el = document.getElementById("spo2") as HTMLInputElement;
+          if (el) el.value = avgSpo2.toString();
+        }
+
+        // Use last valid temp
+        if (lastTempRef.current !== null) {
+          const el = document.getElementById("temperature") as HTMLInputElement;
+          if (el) el.value = lastTempRef.current.toString();
+        }
+      }
+    }, 1000);
+  };
+
+
+  const connectUsbMonitor = async () => {
+    try {
+      setIsUsbConnecting(true);
+      const nav = navigator as any;
+      if (!nav.serial) {
+        alert("Web Serial API not supported in this browser. Please use Chrome or Edge.");
+        setIsUsbConnecting(false);
+        return;
+      }
+
+      const port = await nav.serial.requestPort();
+      await port.open({ baudRate: 115200 });
+      setUsbConnected(true);
+      setIsUsbConnecting(false);
+
+      const decoder = new TextDecoderStream();
+      port.readable.pipeTo(decoder.writable);
+      const inputStream = decoder.readable;
+      const reader = inputStream.getReader();
+
+      let buffer = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (value) {
+          buffer += value;
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+          for (const line of lines) {
+            try {
+              const data = JSON.parse(line.trim());
+              if (data.hr !== undefined) {
+                if (isMeasuringRef.current) {
+                  setLiveHr(data.hr);
+                  hrSamples.current.push(data.hr);
+                }
+              }
+              if (data.spo2 !== undefined) {
+                if (isMeasuringRef.current) {
+                  if (data.spo2 >= 90 && data.spo2 <= 100) {
+                    setLiveSpo2(data.spo2);
+                    spo2Samples.current.push(data.spo2);
+                  }
+                }
+              }
+              if (data.temp !== undefined) {
+                if (isMeasuringRef.current) {
+                  const tempF = Number((data.temp * 9 / 5 + 32).toFixed(1));
+                  setLiveTemp(tempF);
+                  lastTempRef.current = tempF;
+                }
+              }
+            } catch (e) { }
+          }
+        }
+        if (done) {
+          reader.releaseLock();
+          break;
+        }
+      }
+    } catch (err) {
+      console.error("USB Error", err);
+      setIsUsbConnecting(false);
+      setUsbConnected(false);
+    }
+  };
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -122,8 +252,8 @@ export function VoicebotClient({
 
   const startVisionCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } 
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
       });
       visionStream.current = stream;
       setIsVisionActive(true);
@@ -149,96 +279,96 @@ export function VoicebotClient({
 
   const captureAndAnalyze = async () => {
     if (!videoRef.current || !canvasRef.current || !visionStream.current) return;
-    
+
     setVisionStatus("processing");
-    
+
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    
+
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    
+
     const context = canvas.getContext('2d');
     if (!context) return;
-    
+
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
     const imageDataUrl = canvas.toDataURL('image/jpeg');
-    
+
     stopVisionCamera();
     setIsProcessing(true);
-    
+
     try {
-        const response = await fetch('http://127.0.0.1:8080/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
+      const response = await fetch('http://127.0.0.1:8080/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'local-model',
+          messages: [
+            {
+              role: "system",
+              content: "You are an expert medical AI assistant. Analyze the provided image and give a detailed, medically-oriented description. Identify any visible conditions, anatomical structures, or abnormalities using precise medical terminology. Limit your description to 125 words maximum."
             },
-            body: JSON.stringify({
-                model: 'local-model',
-                messages: [
-                    {
-                        role: "system",
-                        content: "You are an expert medical AI assistant. Analyze the provided image and give a detailed, medically-oriented description. Identify any visible conditions, anatomical structures, or abnormalities using precise medical terminology. Limit your description to 125 words maximum."
-                    },
-                    {
-                        role: "user",
-                        content: [
-                            { type: "text", text: "Please analyze this image based on the system instructions. Strictly limit your response to a maximum of 125 words." },
-                            { type: "image_url", image_url: { url: imageDataUrl } }
-                        ]
-                    }
-                ],
-                temperature: 0.5,
-                max_tokens: 1024
-            })
-        });
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "Please analyze this image based on the system instructions. Strictly limit your response to a maximum of 125 words." },
+                { type: "image_url", image_url: { url: imageDataUrl } }
+              ]
+            }
+          ],
+          temperature: 0.5,
+          max_tokens: 1024
+        })
+      });
 
-        if (!response.ok) {
-            throw new Error('Failed to connect to LM Studio.');
+      if (!response.ok) {
+        throw new Error('Failed to connect to LM Studio.');
+      }
+
+      const data = await response.json();
+      const description = data.choices[0].message.content;
+      setVisionDescription(description);
+
+      setTranscript((prev) => [
+        ...prev,
+        {
+          role: "nurse",
+          textNative: `[Visual Analysis Uploaded] ${description}`,
+          textEn: `[Visual Analysis Uploaded] ${description}`,
         }
+      ]);
 
-        const data = await response.json();
-        const description = data.choices[0].message.content;
-        setVisionDescription(description);
-        
+      const res = await edgeApi.voiceTurnText({
+        visit_id: visitId,
+        text_en: `Visual analysis of patient condition: ${description}. Please acknowledge this visual finding.`
+      });
+
+      const botText = res.bot_text_native || res.bot_text_en;
+      if (botText) {
         setTranscript((prev) => [
           ...prev,
           {
-            role: "nurse",
-            textNative: `[Visual Analysis Uploaded] ${description}`,
-            textEn: `[Visual Analysis Uploaded] ${description}`,
-          }
+            role: "bot",
+            textNative: botText,
+            textEn: res.bot_text_en || botText,
+            audioUrl: res.bot_audio_url,
+          },
         ]);
-        
-        const res = await edgeApi.voiceTurnText({ 
-          visit_id: visitId, 
-          text_en: `Visual analysis of patient condition: ${description}. Please acknowledge this visual finding.` 
-        });
+        if (res.bot_audio_url) playAudio(res.bot_audio_url);
+      }
 
-        const botText = res.bot_text_native || res.bot_text_en;
-        if (botText) {
-          setTranscript((prev) => [
-            ...prev,
-            {
-              role: "bot",
-              textNative: botText,
-              textEn: res.bot_text_en || botText,
-              audioUrl: res.bot_audio_url,
-            },
-          ]);
-          if (res.bot_audio_url) playAudio(res.bot_audio_url);
-        }
-
-        if (res.intake_done || res.next_action === "complete_intake") {
-          await finalizeIntake();
-        }
+      if (res.intake_done || res.next_action === "complete_intake") {
+        await finalizeIntake();
+      }
 
     } catch (error: any) {
-        console.error('Vision Analysis Error:', error);
-        alert(`Vision analysis failed: ${error.message}`);
+      console.error('Vision Analysis Error:', error);
+      alert(`Vision analysis failed: ${error.message}`);
     } finally {
-        setVisionStatus("done");
-        setIsProcessing(false);
+      setVisionStatus("done");
+      setIsProcessing(false);
     }
   };
 
@@ -520,13 +650,13 @@ export function VoicebotClient({
         { role: "patient", textNative: userText, textEn: userText },
         ...(botText
           ? [
-              {
-                role: "bot" as const,
-                textNative: botText,
-                textEn: res.bot_text_en || botText,
-                audioUrl: res.bot_audio_url,
-              },
-            ]
+            {
+              role: "bot" as const,
+              textNative: botText,
+              textEn: res.bot_text_en || botText,
+              audioUrl: res.bot_audio_url,
+            },
+          ]
           : []),
       ]);
 
@@ -588,13 +718,13 @@ export function VoicebotClient({
         },
         ...(botText
           ? [
-              {
-                role: "bot" as const,
-                textNative: botText,
-                textEn: res.bot_text_en || botText,
-                audioUrl: res.bot_audio_url,
-              },
-            ]
+            {
+              role: "bot" as const,
+              textNative: botText,
+              textEn: res.bot_text_en || botText,
+              audioUrl: res.bot_audio_url,
+            },
+          ]
           : []),
       ]);
 
@@ -686,11 +816,10 @@ export function VoicebotClient({
                         key={lang}
                         type="button"
                         onClick={() => setLanguage(lang)}
-                        className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between h-24 ${
-                          isSelected
+                        className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between h-24 ${isSelected
                             ? "bg-secondary border-accent shadow-sm ring-2 ring-accent/30"
                             : "bg-background border-border hover:border-accent/40"
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-muted text-muted-foreground">
@@ -719,6 +848,18 @@ export function VoicebotClient({
                     <Activity className="w-4 h-4 text-accent" />
                     <span>2. Record Baseline Vitals</span>
                   </label>
+                  <button
+                    type="button"
+                    onClick={usbConnected ? startMeasurement : connectUsbMonitor}
+                    disabled={isUsbConnecting || isMeasuring}
+                    className={`flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${usbConnected
+                        ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100 cursor-pointer'
+                        : 'bg-secondary text-secondary-foreground border-border hover:bg-secondary/80'
+                      }`}
+                  >
+                    <Usb className="w-3.5 h-3.5" />
+                    {isUsbConnecting ? "Connecting..." : usbConnected ? "Measure (30s)" : "Connect USB Monitor"}
+                  </button>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -824,6 +965,61 @@ export function VoicebotClient({
                   )}
                 </button>
               </div>
+
+              {/* MEASUREMENT MODAL */}
+              {isMeasuring && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                  <div className="bg-card w-full max-w-2xl rounded-2xl shadow-2xl border border-border overflow-hidden flex flex-col">
+                    {/* Header */}
+                    <div className="p-6 border-b border-border bg-muted/30">
+                      <h2 className="text-xl font-bold text-foreground">Capturing Vitals...</h2>
+                      <p className="text-sm text-muted-foreground mt-1">Please keep your finger steady on the sensor.</p>
+                    </div>
+
+                    {/* Live Waveform Area (Simulated) */}
+                    <div className="h-32 bg-[#0A192F] relative overflow-hidden flex items-center justify-center border-y border-border">
+                      <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
+
+                      <div className="flex items-center text-[#00FFCC] animate-pulse">
+                        <Activity className="w-16 h-16" />
+                      </div>
+                    </div>
+
+                    {/* Live Stats */}
+                    <div className="grid grid-cols-3 divide-x divide-border bg-card">
+                      <div className="p-6 flex flex-col items-center justify-center">
+                        <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5"><Heart className="w-3 h-3 text-destructive" /> Heart Rate</span>
+                        <span className="text-4xl font-bold text-foreground">{liveHr !== null ? liveHr : "--"}</span>
+                        <span className="text-[10px] text-muted-foreground mt-1">bpm</span>
+                      </div>
+                      <div className="p-6 flex flex-col items-center justify-center">
+                        <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5"><ShieldCheck className="w-3 h-3 text-[#00FFCC]" /> SpO2</span>
+                        <span className="text-4xl font-bold text-foreground">{liveSpo2 !== null ? liveSpo2 : "--"}</span>
+                        <span className="text-[10px] text-muted-foreground mt-1">%</span>
+                      </div>
+                      <div className="p-6 flex flex-col items-center justify-center">
+                        <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5"><Thermometer className="w-3 h-3 text-amber-500" /> Temp</span>
+                        <span className="text-4xl font-bold text-foreground">{liveTemp !== null ? liveTemp : "--"}</span>
+                        <span className="text-[10px] text-muted-foreground mt-1">°F</span>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar & Footer */}
+                    <div className="p-6 border-t border-border bg-muted/30">
+                      <div className="flex items-center justify-between text-xs font-bold mb-2">
+                        <span className="text-accent">Averaging readings...</span>
+                        <span className="text-foreground">{timeLeft}s remaining</span>
+                      </div>
+                      <div className="w-full h-3 bg-secondary rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-accent transition-all duration-1000 ease-linear"
+                          style={{ width: `${measureProgress}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </form>
           </div>
         </div>
@@ -833,7 +1029,7 @@ export function VoicebotClient({
           {/* Light Theme Navy Header Card */}
           <div className="bg-primary text-primary-foreground rounded-2xl p-6 shadow-soft border border-border relative overflow-hidden">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              
+
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <span className="p-1.5 bg-accent/20 text-accent rounded-lg">
@@ -856,7 +1052,7 @@ export function VoicebotClient({
 
               {/* Engine Status & Controls */}
               <div className="flex flex-wrap items-center gap-3">
-                
+
                 {/* Edge AI Health Badge */}
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-white/10 rounded-xl border border-white/15 text-xs text-white">
                   {healthStatus?.llm === "ok" ? (
@@ -906,11 +1102,10 @@ export function VoicebotClient({
                           setLanguage(lang);
                         }
                       }}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                        language === lang
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${language === lang
                           ? "bg-accent text-white shadow-sm"
                           : "text-white/80 hover:bg-white/10"
-                      }`}
+                        }`}
                     >
                       {lang.toUpperCase()}
                     </button>
@@ -927,7 +1122,7 @@ export function VoicebotClient({
 
             {/* Main Chat Panel */}
             <div className={`${intakeResult ? "lg:col-span-7" : "lg:col-span-12"} bg-card rounded-xl shadow-soft border border-border flex flex-col h-[680px] overflow-hidden`}>
-              
+
               {/* Sub-header Bar */}
               <div className="px-6 py-3 bg-secondary border-b border-border flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
@@ -943,7 +1138,7 @@ export function VoicebotClient({
                   >
                     <RefreshCw className="w-4 h-4" />
                   </button>
-                  
+
                   <button
                     onClick={() => finalizeIntake()}
                     disabled={isFinalizing || transcript.length === 0}
@@ -960,9 +1155,8 @@ export function VoicebotClient({
                 {transcript.map((turn, idx) => (
                   <div
                     key={idx}
-                    className={`flex flex-col ${
-                      turn.role === "patient" || turn.role === "patient_to_doctor" ? "items-end" : "items-start"
-                    }`}
+                    className={`flex flex-col ${turn.role === "patient" || turn.role === "patient_to_doctor" ? "items-end" : "items-start"
+                      }`}
                   >
                     {/* Speaker Badge */}
                     <div className="flex items-center gap-1.5 mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground px-1">
@@ -975,26 +1169,25 @@ export function VoicebotClient({
                         {turn.role === "bot"
                           ? "Vaidhya AI Assistant"
                           : turn.role === "patient_to_doctor"
-                          ? "Patient Reply (To Doctor)"
-                          : turn.role === "patient"
-                          ? "Patient Response"
-                          : turn.role === "nurse"
-                          ? "Nurse Input"
-                          : "Doctor Question"}
+                            ? "Patient Reply (To Doctor)"
+                            : turn.role === "patient"
+                              ? "Patient Response"
+                              : turn.role === "nurse"
+                                ? "Nurse Input"
+                                : "Doctor Question"}
                       </span>
                     </div>
 
                     {/* Bubble */}
                     <div
-                      className={`max-w-[85%] sm:max-w-[78%] px-4 py-3 leading-relaxed text-sm shadow-sm ${
-                        turn.role === "patient" || turn.role === "patient_to_doctor"
+                      className={`max-w-[85%] sm:max-w-[78%] px-4 py-3 leading-relaxed text-sm shadow-sm ${turn.role === "patient" || turn.role === "patient_to_doctor"
                           ? "bg-primary text-primary-foreground rounded-xl rounded-tr-sm border border-accent/30"
                           : turn.role === "bot"
-                          ? "bg-card border border-border text-foreground rounded-xl rounded-tl-sm"
-                          : turn.role === "nurse"
-                          ? "bg-[#F4F0FB] border border-[#E4D9F5] text-foreground rounded-xl rounded-tl-sm"
-                          : "bg-[#E5F5F3] border border-[#C2E8E4] text-[#14736A] rounded-xl rounded-tl-sm"
-                      }`}
+                            ? "bg-card border border-border text-foreground rounded-xl rounded-tl-sm"
+                            : turn.role === "nurse"
+                              ? "bg-[#F4F0FB] border border-[#E4D9F5] text-foreground rounded-xl rounded-tl-sm"
+                              : "bg-[#E5F5F3] border border-[#C2E8E4] text-[#14736A] rounded-xl rounded-tl-sm"
+                        }`}
                     >
                       {/* Native / Main Text */}
                       <p className="font-semibold">{turn.textNative || turn.textEn}</p>
@@ -1002,11 +1195,10 @@ export function VoicebotClient({
                       {/* Secondary Translation Line */}
                       {turn.textEn && turn.textNative && turn.textEn !== turn.textNative && (
                         <p
-                          className={`text-xs mt-1.5 pt-1.5 border-t ${
-                            turn.role === "patient"
+                          className={`text-xs mt-1.5 pt-1.5 border-t ${turn.role === "patient"
                               ? "border-white/20 text-white/80"
                               : "border-border text-muted-foreground"
-                          }`}
+                            }`}
                         >
                           <span className="font-bold">English:</span> {turn.textEn}
                         </p>
@@ -1016,13 +1208,12 @@ export function VoicebotClient({
                       {turn.audioUrl && (
                         <button
                           onClick={() => playAudio(turn.audioUrl!)}
-                          className={`mt-2 inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-lg transition shadow-xs ${
-                            currentlyPlayingUrl === turn.audioUrl
+                          className={`mt-2 inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-lg transition shadow-xs ${currentlyPlayingUrl === turn.audioUrl
                               ? "bg-accent text-accent-foreground"
                               : turn.role === "patient"
-                              ? "bg-white/20 hover:bg-white/30 text-white"
-                              : "bg-secondary hover:bg-secondary/80 text-secondary-foreground border border-border"
-                          }`}
+                                ? "bg-white/20 hover:bg-white/30 text-white"
+                                : "bg-secondary hover:bg-secondary/80 text-secondary-foreground border border-border"
+                            }`}
                         >
                           <Volume2 className="w-3.5 h-3.5" />
                           <span>Play Spoken Audio</span>
@@ -1087,12 +1278,12 @@ export function VoicebotClient({
                     <p className="text-foreground text-xs font-semibold mt-0.5">{pendingFinding.instruction_en}</p>
                   </div>
                   <form onSubmit={handleNurseFindingSubmit} className="flex gap-2 w-full sm:w-auto">
-                    <input 
-                      type="text" 
-                      name="finding_value" 
-                      required 
-                      placeholder="Enter reading..." 
-                      className="h-9 px-3 border border-border rounded-lg bg-card text-foreground text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-ring" 
+                    <input
+                      type="text"
+                      name="finding_value"
+                      required
+                      placeholder="Enter reading..."
+                      className="h-9 px-3 border border-border rounded-lg bg-card text-foreground text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-ring"
                     />
                     <button type="submit" className="bg-primary text-primary-foreground px-4 h-9 rounded-lg text-xs font-bold shadow-sm hover:opacity-90">
                       Submit
@@ -1103,19 +1294,19 @@ export function VoicebotClient({
 
               {/* Controls Footer */}
               <div className="p-4 sm:p-5 bg-card border-t border-border flex flex-col sm:flex-row items-center gap-4">
-                
+
                 {/* Text Input Fallback */}
                 <form onSubmit={handleTextSubmit} className="flex-1 flex gap-2 w-full">
-                  <input 
-                    type="text" 
-                    value={textInput} 
-                    onChange={(e) => setTextInput(e.target.value)} 
-                    placeholder="Type your response here..." 
-                    className="flex-1 h-11 px-4 border border-border rounded-lg bg-background text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-ring" 
+                  <input
+                    type="text"
+                    value={textInput}
+                    onChange={(e) => setTextInput(e.target.value)}
+                    placeholder="Type your response here..."
+                    className="flex-1 h-11 px-4 border border-border rounded-lg bg-background text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                     disabled={isProcessing || !!pendingFinding}
                   />
-                  <button 
-                    type="submit" 
+                  <button
+                    type="submit"
                     disabled={!textInput.trim() || isProcessing || !!pendingFinding}
                     className="px-5 h-11 bg-primary text-primary-foreground rounded-lg font-bold text-xs shadow-sm hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center gap-1.5 shrink-0"
                   >
@@ -1123,7 +1314,7 @@ export function VoicebotClient({
                     <Send className="w-3.5 h-3.5" />
                   </button>
                 </form>
-                
+
                 <div className="hidden sm:block text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">OR</div>
 
                 {/* Vision / Camera Button */}
@@ -1141,11 +1332,10 @@ export function VoicebotClient({
                 <button
                   onClick={isRecording ? stopRecording : startRecording}
                   disabled={isProcessing || !!pendingFinding}
-                  className={`h-11 px-6 rounded-full font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-2 shrink-0 ${
-                    isRecording ? "bg-destructive text-white hover:bg-destructive/90 animate-pulse" : 
-                    isProcessing || !!pendingFinding ? "bg-muted text-muted-foreground cursor-not-allowed" : 
-                    "bg-secondary text-primary hover:bg-secondary/80 border border-border"
-                  }`}
+                  className={`h-11 px-6 rounded-full font-bold text-xs shadow-sm transition-all flex items-center justify-center gap-2 shrink-0 ${isRecording ? "bg-destructive text-white hover:bg-destructive/90 animate-pulse" :
+                      isProcessing || !!pendingFinding ? "bg-muted text-muted-foreground cursor-not-allowed" :
+                        "bg-secondary text-primary hover:bg-secondary/80 border border-border"
+                    }`}
                 >
                   {isRecording ? (
                     <>
@@ -1173,82 +1363,81 @@ export function VoicebotClient({
                   peer at all and the doctor's offer went unanswered. */}
               <WebRtcConsultHub visitId={visitId} role="patient" userId={patientId} />
 
-            {intakeResult && (
-              <div className="bg-card rounded-xl p-6 shadow-soft border border-border space-y-5">
+              {intakeResult && (
+                <div className="bg-card rounded-xl p-6 shadow-soft border border-border space-y-5">
 
-                <div className="flex items-center gap-3 border-b border-border pb-4">
-                  <div className="w-10 h-10 rounded-full bg-[#E5F5F3] text-[#14736A] flex items-center justify-center font-bold">
-                    <CheckCircle2 className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-accent">Clinical Triage Completed</p>
-                    <h3 className="text-xl font-bold text-foreground">Consultation Summary</h3>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  
-                  {/* Urgency Level Badge */}
-                  <div
-                    className={`p-4 rounded-xl border font-bold text-xs flex items-center justify-between ${
-                      intakeResult.urgency_tier.tier === "urgent"
-                        ? "bg-destructive/10 border-destructive/20 text-destructive"
-                        : intakeResult.urgency_tier.tier === "elevated"
-                        ? "bg-[#EEF3FB] border-[#D1E0F5] text-[#315A94]"
-                        : "bg-[#E5F5F3] border-[#C2E8E4] text-[#14736A]"
-                    }`}
-                  >
-                    <span>Urgency Assessment Tier</span>
-                    <span className="uppercase tracking-widest text-xs px-2.5 py-1 rounded-full bg-white/80 shadow-xs">
-                      {intakeResult.urgency_tier.tier} ({intakeResult.urgency_tier.flag_count} Flags)
-                    </span>
+                  <div className="flex items-center gap-3 border-b border-border pb-4">
+                    <div className="w-10 h-10 rounded-full bg-[#E5F5F3] text-[#14736A] flex items-center justify-center font-bold">
+                      <CheckCircle2 className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-accent">Clinical Triage Completed</p>
+                      <h3 className="text-xl font-bold text-foreground">Consultation Summary</h3>
+                    </div>
                   </div>
 
-                  {/* Chief Complaint */}
-                  <div className="bg-background p-4 rounded-xl border border-border">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground mb-1">Chief Complaint</p>
-                    <p className="text-foreground font-bold text-xs">{intakeResult.chief_complaint}</p>
-                  </div>
+                  <div className="space-y-4">
 
-                  {/* Narrative Summary */}
-                  <div className="bg-background p-4 rounded-xl border border-border">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground mb-1">Diagnostic Summary</p>
-                    <p className="text-foreground text-xs leading-relaxed font-medium">{intakeResult.summary_text}</p>
-                    {visionDescription && (
-                      <div className="mt-4 pt-4 border-t border-border">
-                        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground mb-2 flex items-center gap-1.5"><Camera className="w-3.5 h-3.5 text-accent" /> Visual Analysis Attached</p>
-                        <p className="text-foreground text-xs leading-relaxed font-medium italic">{visionDescription}</p>
+                    {/* Urgency Level Badge */}
+                    <div
+                      className={`p-4 rounded-xl border font-bold text-xs flex items-center justify-between ${intakeResult.urgency_tier.tier === "urgent"
+                          ? "bg-destructive/10 border-destructive/20 text-destructive"
+                          : intakeResult.urgency_tier.tier === "elevated"
+                            ? "bg-[#EEF3FB] border-[#D1E0F5] text-[#315A94]"
+                            : "bg-[#E5F5F3] border-[#C2E8E4] text-[#14736A]"
+                        }`}
+                    >
+                      <span>Urgency Assessment Tier</span>
+                      <span className="uppercase tracking-widest text-xs px-2.5 py-1 rounded-full bg-white/80 shadow-xs">
+                        {intakeResult.urgency_tier.tier} ({intakeResult.urgency_tier.flag_count} Flags)
+                      </span>
+                    </div>
+
+                    {/* Chief Complaint */}
+                    <div className="bg-background p-4 rounded-xl border border-border">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground mb-1">Chief Complaint</p>
+                      <p className="text-foreground font-bold text-xs">{intakeResult.chief_complaint}</p>
+                    </div>
+
+                    {/* Narrative Summary */}
+                    <div className="bg-background p-4 rounded-xl border border-border">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground mb-1">Diagnostic Summary</p>
+                      <p className="text-foreground text-xs leading-relaxed font-medium">{intakeResult.summary_text}</p>
+                      {visionDescription && (
+                        <div className="mt-4 pt-4 border-t border-border">
+                          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground mb-2 flex items-center gap-1.5"><Camera className="w-3.5 h-3.5 text-accent" /> Visual Analysis Attached</p>
+                          <p className="text-foreground text-xs leading-relaxed font-medium italic">{visionDescription}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Urgency Rules list */}
+                    {intakeResult.urgency_tier.flags.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Fired Urgency Rules</p>
+                        <div className="space-y-1">
+                          {intakeResult.urgency_tier.flags.map((f, i) => (
+                            <div
+                              key={i}
+                              className="text-xs px-3 py-1.5 bg-destructive/10 text-destructive border border-destructive/20 rounded-lg font-semibold"
+                            >
+                              ⚠️ {f.description}
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
+
                   </div>
 
-                  {/* Urgency Rules list */}
-                  {intakeResult.urgency_tier.flags.length > 0 && (
-                    <div className="space-y-1.5">
-                      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Fired Urgency Rules</p>
-                      <div className="space-y-1">
-                        {intakeResult.urgency_tier.flags.map((f, i) => (
-                          <div
-                            key={i}
-                            className="text-xs px-3 py-1.5 bg-destructive/10 text-destructive border border-destructive/20 rounded-lg font-semibold"
-                          >
-                            ⚠️ {f.description}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  <div className="p-3 bg-[#E5F5F3] rounded-xl border border-[#C2E8E4] text-center">
+                    <p className="text-xs text-[#14736A] font-bold">
+                      ✓ Report synced to Doctor Queue via Outbox & MQTT
+                    </p>
+                  </div>
 
                 </div>
-
-                <div className="p-3 bg-[#E5F5F3] rounded-xl border border-[#C2E8E4] text-center">
-                  <p className="text-xs text-[#14736A] font-bold">
-                    ✓ Report synced to Doctor Queue via Outbox & MQTT
-                  </p>
-                </div>
-
-              </div>
-            )}
+              )}
 
             </div>
 

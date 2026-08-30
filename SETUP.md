@@ -123,6 +123,7 @@ must appear here, or `npm run check` fails.
 | `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` | report writes |
 | `EDGE_DB_PATH` / `AUDIO_DIR` | local SQLite and the generated mp3s |
 | `MQTT_URL` / `MQTT_USERNAME` / `MQTT_PASSWORD` | broker |
+| `GEMINI_API_KEY` / `ELEVENLABS_API_KEY` | api keys |
 
 ---
 
