@@ -23,9 +23,9 @@ export default async function DoctorConsultPage({
 
   return (
     <div className="min-h-screen bg-bg pt-6">
-      <ConsultClient visit={visit} doctorId={session.doctorId} />
+      <ConsultClient key={`consult-${visitId}`} visit={visit} doctorId={session.doctorId} />
       <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 pb-6">
-        <SpecialistPanel visitId={visitId} />
+        <SpecialistPanel key={`panel-${visitId}`} visitId={visitId} />
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import { topics, createDedupe } from "@vaidhya/shared";
 import type { Visit as MockVisit } from "@/lib/queue";
 import type { PatientToDoctorMessage, DoctorToPatientMessage } from "@vaidhya/shared";
 import { WebRtcConsultHub } from "@/components/WebRtcConsultHub";
+import { submitInlinePrescription, closeConsultSession } from "./actions";
 import { enqueueConsultMessage, loadConsultHistory, loadConsultOutbox, mergeConsultMessages, removeConsultOutboxMessage, saveConsultHistory, serverMessageToConsultMessage } from "@/lib/consultHistory";
 import { 
   FileText, 
@@ -17,7 +18,8 @@ import {
   Sparkles,
   ArrowRight,
   Activity,
-  HeartPulse
+  HeartPulse,
+  CheckCircle2
 } from "lucide-react";
 
 export function ConsultClient({
@@ -30,6 +32,32 @@ export function ConsultClient({
   const [messages, setMessages] = useState<Array<DoctorToPatientMessage | PatientToDoctorMessage>>([]);
   const [inputValue, setInputValue] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const [showPrescription, setShowPrescription] = useState(false);
+  const [meds, setMeds] = useState([{ id: crypto.randomUUID(), name: "", dosage: "", duration: "", instructions: "" }]);
+  const [isSubmittingRx, setIsSubmittingRx] = useState(false);
+  const [rxSent, setRxSent] = useState(false);
+  const [followUp, setFollowUp] = useState(false);
+  const [rxError, setRxError] = useState("");
+
+  const handleSendPrescription = async (e) => {
+    e.preventDefault();
+    setIsSubmittingRx(true);
+    setRxError("");
+    try {
+      await submitInlinePrescription(visit.visitId, meds, followUp);
+      setRxSent(true);
+    } catch (err) {
+      setRxError(err.message || "Failed to send prescription");
+    } finally {
+      setIsSubmittingRx(false);
+    }
+  };
+
+  const handleCloseSession = async () => {
+    await closeConsultSession(visit.visitId, meds);
+  };
+
 
   // The page is server-rendered at claim time. If intake finishes (or the
   // summary is regenerated) while the doctor is already on this screen, the
@@ -313,20 +341,73 @@ export function ConsultClient({
           </div>
         </div>
 
+        
         {/* Action Button: Issue Digital Prescription */}
         <div className="pt-3 border-t border-border">
-          <a 
-            href={`/doctor/prescribe/${visit.visitId}`}
-            className="w-full bg-primary text-primary-foreground py-3 px-4 rounded-xl font-bold text-xs hover:opacity-90 transition-all shadow-md flex items-center justify-center gap-2 group"
-          >
-            <Pill className="w-4 h-4 text-accent group-hover:scale-110 transition-transform" />
-            <span>Issue Digital Prescription</span>
-            <ArrowRight className="w-3.5 h-3.5 ml-auto" />
-          </a>
+          {!showPrescription ? (
+            <button 
+              type="button"
+              onClick={() => setShowPrescription(true)}
+              className="w-full bg-primary text-primary-foreground py-3 px-4 rounded-xl font-bold text-xs hover:opacity-90 transition-all shadow-md flex items-center justify-center gap-2 group"
+            >
+              <Pill className="w-4 h-4 text-accent group-hover:scale-110 transition-transform" />
+              <span>Issue Digital Prescription</span>
+              <ArrowRight className="w-3.5 h-3.5 ml-auto" />
+            </button>
+          ) : rxSent ? (
+            <div className="space-y-3">
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-600 text-xs font-semibold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>Prescription sent successfully. You can continue the consultation.</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseSession}
+                className="w-full bg-secondary text-foreground py-3 px-4 rounded-xl font-bold text-xs hover:bg-secondary/80 transition-all border border-border flex items-center justify-center gap-2"
+              >
+                Close Session & Return to Queue
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleSendPrescription} className="space-y-3">
+              {rxError && (
+                <div className="p-2 bg-destructive/10 text-destructive text-[10px] font-semibold rounded-lg">
+                  {rxError}
+                </div>
+              )}
+              {meds.map((med, i) => (
+                <div key={med.id} className="p-3 border border-border rounded-lg space-y-2 bg-background">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-accent uppercase tracking-wider">Med #{i+1}</span>
+                    {meds.length > 1 && (
+                      <button type="button" onClick={() => setMeds(meds.filter(m => m.id !== med.id))} className="text-destructive text-[10px] font-bold">Remove</button>
+                    )}
+                  </div>
+                  <input required placeholder="Medication Name" className="w-full h-8 px-2 text-xs border border-border rounded bg-card focus:ring-1 focus:ring-ring" value={med.name} onChange={(e) => setMeds(meds.map(m => m.id === med.id ? {...m, name: e.target.value} : m))} />
+                  <input required placeholder="Dosage (e.g. 1 Tab BD)" className="w-full h-8 px-2 text-xs border border-border rounded bg-card focus:ring-1 focus:ring-ring" value={med.dosage} onChange={(e) => setMeds(meds.map(m => m.id === med.id ? {...m, dosage: e.target.value} : m))} />
+                  <div className="flex gap-2">
+                    <input required placeholder="Days" className="w-1/3 h-8 px-2 text-xs border border-border rounded bg-card focus:ring-1 focus:ring-ring" value={med.duration} onChange={(e) => setMeds(meds.map(m => m.id === med.id ? {...m, duration: e.target.value} : m))} />
+                    <input required placeholder="Instructions" className="flex-1 h-8 px-2 text-xs border border-border rounded bg-card focus:ring-1 focus:ring-ring" value={med.instructions} onChange={(e) => setMeds(meds.map(m => m.id === med.id ? {...m, instructions: e.target.value} : m))} />
+                  </div>
+                </div>
+              ))}
+              <div className="flex items-center gap-2">
+                <input type="checkbox" id="followUp" checked={followUp} onChange={(e) => setFollowUp(e.target.checked)} className="rounded border-border" />
+                <label htmlFor="followUp" className="text-xs font-semibold text-muted-foreground">Request Follow-up</label>
+              </div>
+              <button type="button" onClick={() => setMeds([...meds, { id: crypto.randomUUID(), name: "", dosage: "", duration: "", instructions: "" }])} className="w-full text-xs font-bold text-accent py-1">
+                + Add Medication
+              </button>
+              <button type="submit" disabled={isSubmittingRx} className="w-full bg-primary text-primary-foreground py-2.5 rounded-lg font-bold text-xs disabled:opacity-50">
+                {isSubmittingRx ? "Sending..." : "Send Prescription"}
+              </button>
+              <button type="button" onClick={() => setShowPrescription(false)} className="w-full text-muted-foreground py-1 text-xs font-semibold">
+                Cancel
+              </button>
+            </form>
+          )}
         </div>
       </div>
-
     </div>
   );
 }
-

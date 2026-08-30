@@ -127,6 +127,24 @@ export async function claimVisit(
     ) {
       return existingVisit;
     }
+  } else {
+    // The visit hasn't synced to Supabase from the edge yet (MQTT beat the outbox sync).
+    // Insert it directly as claimed so the UI doesn't wrongly assume another doctor claimed it.
+    const { data: insertData, error: insertError } = await db
+      .from("visits")
+      .insert({
+        visit_id: visitId,
+        status: "in_consult",
+        claimed_by_doctor_id: doctorId,
+        language: "en" // Required by schema
+      })
+      .select(SELECT)
+      .maybeSingle();
+      
+    if (!insertError && insertData) {
+      return toVisit(insertData as unknown as VisitRow);
+    }
+    // If it failed (e.g. primary key conflict because sync JUST arrived), fall through to update.
   }
 
   const { data, error } = await db

@@ -2,29 +2,16 @@
 
 import { randomUUID } from "crypto";
 import { redirect } from "next/navigation";
-
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { completeVisit, type MedicationItem } from "@/lib/queue";
 
-export async function submitPrescription(visitId: string, formData: FormData) {
+export async function submitInlinePrescription(visitId: string, medications: MedicationItem[], followUp: boolean) {
   const session = await getSession();
   if (session.role !== "doctor" || !session.doctorId) {
     throw new Error("Unauthorized");
   }
 
-  const rawMeds = formData.get("medications")?.toString() || "[]";
-  const medications = JSON.parse(rawMeds) as MedicationItem[];
-
-  // Close the visit first. It is a compare-and-swap on `in_consult`, so a
-  // double submit writes one prescription, not two.
-  const closed = await completeVisit(visitId, medications);
-  if (!closed) {
-    throw new Error("Failed to complete visit. It may have already been closed.");
-  }
-
-  // The prescription is the row the patient portal and the pharmacy queue both
-  // read. Without it, demo steps 10 and 11 have nothing to point at.
   const prescriptionId = `rx_${randomUUID().slice(0, 8)}`;
 
   if (db) {
@@ -38,25 +25,17 @@ export async function submitPrescription(visitId: string, formData: FormData) {
         duration: m.duration,
         instructions: m.instructions,
       })),
-      follow_up_requested: formData.get("follow_up") === "on",
+      follow_up_requested: followUp,
     });
 
     if (error) {
-      // The visit is already closed; surfacing this is better than a silent
-      // success that leaves the patient with no prescription to collect.
       throw new Error(`Could not save prescription: ${error.message}`);
     }
   }
 
-  session.visitId = undefined;
-  await session.save();
-
-  // --- N8N WEBHOOK: Automated Medicine & Follow-up Reminders ---
-  // If the doctor requested a follow up or prescribed medicines, trigger the n8n workflow.
   const n8nWebhookUrl = process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL;
   if (n8nWebhookUrl) {
     try {
-      // Fire-and-forget so we don't block the doctor's UI redirect
       fetch(n8nWebhookUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -65,15 +44,31 @@ export async function submitPrescription(visitId: string, formData: FormData) {
           visitId,
           doctorId: session.doctorId,
           medications,
-          followUpRequested: formData.get("follow_up") === "on",
-          patientPhone: "9000000001" // In a real app, fetch this from the visit/patient record
+          followUpRequested: followUp,
+          patientPhone: "9000000001"
         })
       }).catch(err => console.error("[n8n] webhook dispatch failed:", err));
     } catch (err) {
       console.error("[n8n] webhook setup failed:", err);
     }
   }
-  // -------------------------------------------------------------
+
+  return { success: true, prescriptionId };
+}
+
+export async function closeConsultSession(visitId: string, medications: MedicationItem[]) {
+  const session = await getSession();
+  if (session.role !== "doctor" || !session.doctorId) {
+    throw new Error("Unauthorized");
+  }
+
+  const closed = await completeVisit(visitId, medications);
+  if (!closed) {
+    throw new Error("Failed to complete visit. It may have already been closed.");
+  }
+
+  session.visitId = undefined;
+  await session.save();
 
   redirect("/doctor/queue");
 }
