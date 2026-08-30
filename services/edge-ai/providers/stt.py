@@ -62,4 +62,48 @@ class GroqWhisperProvider:
 
 
 def get_stt() -> STTProvider:
+    settings = get_settings()
+    if getattr(settings, "stt_provider", "groq") == "sarvam":
+        return SarvamSTTProvider()
     return GroqWhisperProvider()
+
+class SarvamSTTProvider:
+    def __init__(self) -> None:
+        self.settings = get_settings()
+
+    async def transcribe(self, audio_bytes: bytes, language: str) -> Transcript:
+        import httpx
+        if not self.settings.sarvam_api_key:
+            raise RuntimeError("SARVAM_API_KEY is not set.")
+
+        headers = {"api-subscription-key": self.settings.sarvam_api_key}
+        
+        # sarvam language code mapping
+        lang_map = {
+            "hi": "hi-IN", "bn": "bn-IN", "kn": "kn-IN", "ml": "ml-IN", 
+            "mr": "mr-IN", "od": "od-IN", "pa": "pa-IN", "ta": "ta-IN", 
+            "te": "te-IN", "gu": "gu-IN", "en": "en-IN"
+        }
+        lang_code = lang_map.get(language, language)
+
+        async with httpx.AsyncClient() as client:
+            files_native = {"file": ("audio.webm", audio_bytes, "audio/webm")}
+            data_native = {"model": "saaras:v3", "language_code": lang_code, "mode": "transcribe"}
+            req_native = client.post("https://api.sarvam.ai/speech-to-text", headers=headers, data=data_native, files=files_native, timeout=30.0)
+            
+            files_english = {"file": ("audio.webm", audio_bytes, "audio/webm")}
+            data_english = {"model": "saaras:v3", "language_code": lang_code, "mode": "translate"}
+            req_english = client.post("https://api.sarvam.ai/speech-to-text", headers=headers, data=data_english, files=files_english, timeout=30.0)
+            
+            resp_native, resp_english = await asyncio.gather(req_native, req_english)
+            
+            resp_native.raise_for_status()
+            resp_english.raise_for_status()
+            
+            native_text = resp_native.json().get("transcript", "")
+            english_text = resp_english.json().get("transcript", "")
+            
+            return Transcript(native=native_text, english=english_text)
+
+    async def healthy(self) -> bool:
+        return bool(self.settings.sarvam_api_key)

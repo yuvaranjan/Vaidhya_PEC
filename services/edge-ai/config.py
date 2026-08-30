@@ -12,8 +12,8 @@ class Settings(BaseSettings):
     jurisdiction_id: str = "jur_thrissur_01"
 
     # --- providers ----------------------------------------------------
-    stt_provider: str = "groq"
-    tts_provider: str = "edge_tts"
+    stt_provider: str = "sarvam"
+    tts_provider: str = "sarvam"
     translate_provider: str = "bank"
     edge_llm_provider: str = "lmstudio"
 
@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     groq_stt_model: str = "whisper-large-v3-turbo"
     groq_fallback_model: str = "llama-3.3-70b-versatile"
+    
+    sarvam_api_key: str = "sk_13go2tse_Sv6pXZ106xVjPMfmgMmGYpDa"
     
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-pro"
