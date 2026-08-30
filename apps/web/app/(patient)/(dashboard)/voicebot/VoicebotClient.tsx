@@ -185,27 +185,29 @@ export function VoicebotClient({
           buffer = lines.pop() || "";
           for (const line of lines) {
             try {
-              const data = JSON.parse(line.trim());
-              if (data.hr !== undefined) {
+              const trimmed = line.trim();
+              if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) continue;
+              const data = JSON.parse(trimmed);
+              if (data.hr !== undefined && Number(data.hr) > 0) {
+                const hrVal = Number(data.hr);
+                setLiveHr(hrVal);
                 if (isMeasuringRef.current) {
-                  setLiveHr(data.hr);
-                  hrSamples.current.push(data.hr);
+                  hrSamples.current.push(hrVal);
                 }
               }
-              if (data.spo2 !== undefined) {
+              if (data.spo2 !== undefined && Number(data.spo2) > 0 && Number(data.spo2) <= 100) {
+                const spo2Val = Number(data.spo2);
+                setLiveSpo2(spo2Val);
                 if (isMeasuringRef.current) {
-                  if (data.spo2 >= 90 && data.spo2 <= 100) {
-                    setLiveSpo2(data.spo2);
-                    spo2Samples.current.push(data.spo2);
-                  }
+                  spo2Samples.current.push(spo2Val);
                 }
               }
-              if (data.temp !== undefined) {
-                if (isMeasuringRef.current) {
-                  const tempF = Number((data.temp * 9 / 5 + 32).toFixed(1));
-                  setLiveTemp(tempF);
-                  lastTempRef.current = tempF;
-                }
+              if (data.temp !== undefined && Number(data.temp) > 0) {
+                const rawTemp = Number(data.temp);
+                // Convert Celsius from DS18B20 to Fahrenheit
+                const tempF = Number((rawTemp * 9 / 5 + 32).toFixed(1));
+                setLiveTemp(tempF);
+                lastTempRef.current = tempF;
               }
             } catch (e) { }
           }
@@ -852,15 +854,74 @@ export function VoicebotClient({
                     type="button"
                     onClick={usbConnected ? startMeasurement : connectUsbMonitor}
                     disabled={isUsbConnecting || isMeasuring}
-                    className={`flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${usbConnected
+                    className={`flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${
+                      usbConnected
                         ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100 cursor-pointer'
                         : 'bg-secondary text-secondary-foreground border-border hover:bg-secondary/80'
-                      }`}
+                    }`}
                   >
                     <Usb className="w-3.5 h-3.5" />
-                    {isUsbConnecting ? "Connecting..." : usbConnected ? "Measure (30s)" : "Connect USB Monitor"}
+                    <span>{isUsbConnecting ? "Connecting..." : usbConnected ? (isMeasuring ? `Measuring (${timeLeft}s)...` : "Measure (30s)") : "Connect USB Monitor"}</span>
                   </button>
                 </div>
+
+                {usbConnected && (
+                  <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl space-y-2 text-xs">
+                    <div className="flex items-center justify-between font-bold text-emerald-600 dark:text-emerald-400">
+                      <span className="flex items-center gap-1.5">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                        Hardware Sensor Connected {isMeasuring && `(Measuring: ${timeLeft}s remaining)`}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (liveHr) {
+                            const el = document.getElementById("pulse") as HTMLInputElement;
+                            if (el) el.value = String(liveHr);
+                          }
+                          if (liveSpo2) {
+                            const el = document.getElementById("spo2") as HTMLInputElement;
+                            if (el) el.value = String(liveSpo2);
+                          }
+                          if (liveTemp) {
+                            const el = document.getElementById("temperature") as HTMLInputElement;
+                            if (el) el.value = String(liveTemp);
+                          }
+                        }}
+                        className="px-2.5 py-1 bg-emerald-600 text-white rounded-md font-bold hover:bg-emerald-700 transition-all text-[11px]"
+                      >
+                        Apply Live Readings
+                      </button>
+                    </div>
+
+                    {isMeasuring && (
+                      <div className="w-full bg-emerald-200/50 dark:bg-emerald-950/50 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className="bg-emerald-500 h-1.5 rounded-full transition-all duration-300"
+                          style={{ width: `${measureProgress}%` }}
+                        />
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-3 gap-2 text-center pt-1">
+                      <div className="p-2 bg-background rounded-lg border border-border">
+                        <span className="text-[10px] text-muted-foreground block font-semibold">Pulse</span>
+                        <span className="text-sm font-bold text-destructive">{liveHr ? `${liveHr} bpm` : "Place finger..."}</span>
+                      </div>
+                      <div className="p-2 bg-background rounded-lg border border-border">
+                        <span className="text-[10px] text-muted-foreground block font-semibold">SpO2</span>
+                        <span className="text-sm font-bold text-accent">{liveSpo2 ? `${liveSpo2}%` : "Place finger..."}</span>
+                      </div>
+                      <div className="p-2 bg-background rounded-lg border border-border">
+                        <span className="text-[10px] text-muted-foreground block font-semibold">Body Temp</span>
+                        <span className="text-sm font-bold text-foreground">{liveTemp ? `${liveTemp}°F` : "--"}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>

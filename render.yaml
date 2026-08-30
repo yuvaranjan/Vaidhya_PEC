@@ -14,9 +14,11 @@ services:
       - key: WEB_ORIGIN
         value: https://vaidhya-ies.vercel.app
       - key: STT_PROVIDER
-        value: groq
+        value: sarvam
       - key: TTS_PROVIDER
-        value: edge_tts
+        value: sarvam
+      - key: SARVAM_API_KEY
+        value: sk_13go2tse_Sv6pXZ106xVjPMfmgMmGYpDa
       - key: TRANSLATE_PROVIDER
         value: bank
       - key: EDGE_LLM_PROVIDER

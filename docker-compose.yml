@@ -21,9 +21,9 @@ services:
       - ACTIAN_VECTORAI_TOKEN=
       - ACTIAN_VECTORAI_COLLECTION_PREFIX=vaidhya_
       - ACTIAN_VECTORAI_DIMENSION=8
-      - JURISDICTION_ID=jur_thrissur_01
-      - STT_PROVIDER=groq
-      - TTS_PROVIDER=edge_tts
+      - STT_PROVIDER=sarvam
+      - TTS_PROVIDER=sarvam
+      - SARVAM_API_KEY=${SARVAM_API_KEY:-sk_13go2tse_Sv6pXZ106xVjPMfmgMmGYpDa}
       - TRANSLATE_PROVIDER=bank
       - EDGE_LLM_PROVIDER=groq
       - EDGE_LLM_FALLBACK=groq
