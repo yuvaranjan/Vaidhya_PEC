@@ -1,16 +1,3 @@
 {
-  "steps": [
-    { "n": 1, "title": "Unplug Node A's wifi on camera", "owner": "T1", "phase": "v1", "critical": true },
-    { "n": 2, "title": "Patient login + Nurse vitals (SpO2 91, temp 38.9)", "owner": "T2", "phase": "v1" },
-    { "n": 3, "title": "Malayalam voicebot triage & dual transcript", "owner": "T1", "phase": "v1" },
-    { "n": 4, "title": "Urgency rule fires & branches questions", "owner": "T1", "phase": "v1" },
-    { "n": 5, "title": "On-demand physical exam prompts & fallback", "owner": "T1", "phase": "v1" },
-    { "n": 6, "title": "Offline diagnostic report generation", "owner": "T1", "phase": "v1", "critical": true },
-    { "n": 7, "title": "Reconnect wifi & outbox drains to Actian VectorAI DB", "owner": "T4", "phase": "v1", "critical": true },
-    { "n": 8, "title": "Doctor consult & specialist AI opinion", "owner": "T3", "phase": "v1" },
-    { "n": 9, "title": "Doctor-patient live consult channel", "owner": "T2", "phase": "v1" },
-    { "n": 10, "title": "Doctor prescribes with follow-up flag", "owner": "T2", "phase": "v1" },
-    { "n": 11, "title": "Pharmacy routing, stock check & fulfillment", "owner": "T3", "phase": "v1" },
-    { "n": 12, "title": "Analytics dashboard & epidemic anomaly spike", "owner": "T4", "phase": "v1" }
-  ]
+  "steps": []
 }

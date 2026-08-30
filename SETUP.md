@@ -136,6 +136,7 @@ below must appear here, or `npm run check` fails.
 | `ACTIAN_VECTORAI_DIMENSION` | deterministic vector size for row payload storage, default `8` |
 | `EDGE_DB_PATH` / `AUDIO_DIR` | local SQLite and generated mp3s |
 | `MQTT_URL` / `MQTT_USERNAME` / `MQTT_PASSWORD` | broker |
+| `GEMINI_API_KEY` / `ELEVENLABS_API_KEY` | api keys |
 
 ---
 

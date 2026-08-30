@@ -4,33 +4,25 @@
      Edit your own agents/status/<lane>.md and run `npm run progress`.
      Merge conflict here? Take either side and regenerate. -->
 
-Generated 2026-08-30T05:58:20Z from `agents/status/*.md` · protocol in [agents/README.md](agents/README.md)
+Generated 2026-08-30T01:32:10Z from `agents/status/*.md` · protocol in [agents/README.md](agents/README.md)
 
 ## Right now
 
 | Lane | Owner | State | Working on | Status file |
 |---|---|---|---|---|
+| **T1** | unassigned | ⚪ not started | — | `agents/status/T1.md` |
+| **T2** | unassigned | ⚪ not started | — | `agents/status/T2.md` |
+| **T3** | unassigned | ⚪ not started | — | `agents/status/T3.md` |
+| **T4** | unassigned | ⚪ not started | — | `agents/status/T4.md` |
 
 ## Demo readiness — the §17 set-piece
 
-**V1 path: 0 / 12 steps demonstrable.** All phases: 0 / 12.
+**V1 path: 0 / 0 steps demonstrable.** All phases: 0 / 0.
 
 A step counts only if it can be performed live, right now, in front of a judge.
 
 | # | Step | Owner | Phase | Demonstrable |
 |---|---|---|---|---|
-| 1 | Unplug Node A's wifi on camera ⭐ | T1 | v1 | — |
-| 2 | Patient login + Nurse vitals (SpO2 91, temp 38.9) | T2 | v1 | — |
-| 3 | Malayalam voicebot triage & dual transcript | T1 | v1 | — |
-| 4 | Urgency rule fires & branches questions | T1 | v1 | — |
-| 5 | On-demand physical exam prompts & fallback | T1 | v1 | — |
-| 6 | Offline diagnostic report generation ⭐ | T1 | v1 | — |
-| 7 | Reconnect wifi & outbox drains to Actian VectorAI DB ⭐ | T4 | v1 | — |
-| 8 | Doctor consult & specialist AI opinion | T3 | v1 | — |
-| 9 | Doctor-patient live consult channel | T2 | v1 | — |
-| 10 | Doctor prescribes with follow-up flag | T2 | v1 | — |
-| 11 | Pharmacy routing, stock check & fulfillment | T3 | v1 | — |
-| 12 | Analytics dashboard & epidemic anomaly spike | T4 | v1 | — |
 
 ⭐ = one of the three steps that actually wins it: unplug the wifi, generate the report offline, plug back in and watch it sync into the doctor's queue.
 
@@ -40,10 +32,74 @@ Nothing blocked.
 
 ## Lane detail
 
+### T1 · unassigned · ``
+
+**Done**
+
+- _nothing yet_
+
+**In progress**
+
+- _nothing_
+
+**Next**
+
+- _nothing planned — this lane needs a plan_
+
+Last self-reported update: never
+
+### T2 · unassigned · ``
+
+**Done**
+
+- _nothing yet_
+
+**In progress**
+
+- _nothing_
+
+**Next**
+
+- _nothing planned — this lane needs a plan_
+
+Last self-reported update: never
+
+### T3 · unassigned · ``
+
+**Done**
+
+- _nothing yet_
+
+**In progress**
+
+- _nothing_
+
+**Next**
+
+- _nothing planned — this lane needs a plan_
+
+Last self-reported update: never
+
+### T4 · unassigned · ``
+
+**Done**
+
+- _nothing yet_
+
+**In progress**
+
+- _nothing_
+
+**Next**
+
+- _nothing planned — this lane needs a plan_
+
+Last self-reported update: never
+
 ## Recent commits
 
 ```
-8186808 · 30 Aug 09:49 · feat: migrate database to Actian Vector DB with Docker orchestration and cloud cluster support
+f6f5197 · 30 Aug 03:24 · Merge pull request #1 from yuvaranjan/Integrating-predictive-analyse
 8bfa191 · 30 Aug 03:11 · integrated ai analytics page
 cc26d4b · 29 Aug 22:24 · Initial commit
 ```
