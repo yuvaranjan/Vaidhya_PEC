@@ -1,8 +1,8 @@
 """
-Diagnostic report builder + Supabase write (T1 task 10, ~1h).
+Diagnostic report builder + Actian VectorAI DB outbox write (T1 task 10).
 
 On /intake/complete, do BOTH:
-  1. write the report to Supabase — the durable record, so the queue survives a
+  1. write the report to local SQLite and queue it for Actian VectorAI DB, so the queue survives a
      refresh and a doctor who logs in late still sees the visit
   2. publish to vaidhya/queue/new (retained) — so the doctor's queue updates
      live without polling
@@ -162,8 +162,8 @@ async def build_and_publish(session: Session) -> IntakeCompleteResponse:
 
     report_id = uuid.uuid4().hex
 
-    # 3. Local SQLite is the system of record. Supabase is downstream of the
-    #    outbox — this function never waits on the network.
+    # 3. Local SQLite is the system of record. Actian VectorAI DB is downstream
+    #    of the outbox, so this function never waits on the network.
     transcript = [
         {"speaker": t.speaker, "text_en": t.text_en, "text_native": t.text_native}
         for t in session.turns

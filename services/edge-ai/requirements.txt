@@ -16,7 +16,6 @@ httpx>=0.27                     # LM Studio (OpenAI-compatible) + everything els
 groq>=0.11                      # Whisper turbo STT + LLM fallback + specialist
 edge-tts>=6.1                   # Malayalam/Tamil/Hindi TTS, no API key, works offline-ish
 paho-mqtt>=2.1                  # Seam B
-supabase>=2.9                   # report write
 
 # Optional — local translation. Heavy; the cache + LLM path works without it.
 # transformers>=4.44

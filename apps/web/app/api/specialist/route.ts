@@ -64,7 +64,7 @@ export async function POST(req: Request) {
     const { visit_id } = await req.json();
 
     let clinicalContext = "Patient complains of chest pain and shortness of breath. HR 110, BP 140/90.";
-    // `db` is null when Supabase is unconfigured, so a static import is safe —
+    // `db` is null when Actian VectorAI DB is unconfigured, so a static import is safe:
     // the dynamic one could not resolve its own path and failed the typecheck.
     if (db) {
       const { data } = await db

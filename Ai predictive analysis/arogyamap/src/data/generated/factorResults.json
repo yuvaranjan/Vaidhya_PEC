@@ -1,0 +1,43 @@
+{
+  "metadata": {
+    "modelA": "LogisticRegression(class_weight='balanced')",
+    "modelB": "RandomForestClassifier(n_estimators=100, max_depth=3)",
+    "sampleCount": 528,
+    "spikeCount": 57,
+    "featuresEvaluated": 5
+  },
+  "globalFactors": [
+    {
+      "name": "Rainfall Index",
+      "importance": 54,
+      "direction": "increasing"
+    },
+    {
+      "name": "Sanitation Deficit",
+      "importance": 26,
+      "direction": "increasing"
+    },
+    {
+      "name": "Population Density",
+      "importance": 10,
+      "direction": "decreasing"
+    },
+    {
+      "name": "Unprotected Water Source",
+      "importance": 8,
+      "direction": "decreasing"
+    },
+    {
+      "name": "Public Gatherings / Markets",
+      "importance": 2,
+      "direction": "decreasing"
+    }
+  ],
+  "featureCoefficients": {
+    "Rainfall Index": 0.9128,
+    "Sanitation Deficit": 0.8403,
+    "Population Density": -0.0725,
+    "Unprotected Water Source": -0.4281,
+    "Public Gatherings / Markets": -0.0018
+  }
+}

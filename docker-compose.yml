@@ -1,0 +1,59 @@
+services:
+  actian-vectorai:
+    image: qdrant/qdrant:latest
+    container_name: vaidhya-vectorai-db
+    ports:
+      - "6573:6333"
+      - "6574:6334"
+    volumes:
+      - actian_data:/qdrant/storage
+    restart: unless-stopped
+
+  edge-ai:
+    build:
+      context: .
+      dockerfile: Dockerfile.edge
+    container_name: vaidhya-edge-ai
+    ports:
+      - "8000:8000"
+    environment:
+      - ACTIAN_VECTORAI_URL=http://actian-vectorai:6333
+      - ACTIAN_VECTORAI_TOKEN=
+      - ACTIAN_VECTORAI_COLLECTION_PREFIX=vaidhya_
+      - ACTIAN_VECTORAI_DIMENSION=8
+      - JURISDICTION_ID=jur_thrissur_01
+      - STT_PROVIDER=groq
+      - TTS_PROVIDER=edge_tts
+      - TRANSLATE_PROVIDER=bank
+      - EDGE_LLM_PROVIDER=groq
+      - EDGE_LLM_FALLBACK=groq
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - WEB_ORIGIN=http://localhost:3000
+    depends_on:
+      - actian-vectorai
+    volumes:
+      - edge_data:/app/edge_data
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: vaidhya-web
+    ports:
+      - "3000:3000"
+    environment:
+      - ACTIAN_VECTORAI_URL=http://actian-vectorai:6333
+      - ACTIAN_VECTORAI_TOKEN=
+      - ACTIAN_VECTORAI_COLLECTION_PREFIX=vaidhya_
+      - ACTIAN_VECTORAI_DIMENSION=8
+      - NEXT_PUBLIC_EDGE_AI_URL=http://localhost:8000
+    depends_on:
+      - actian-vectorai
+      - edge-ai
+    restart: unless-stopped
+
+volumes:
+  actian_data:
+  edge_data:

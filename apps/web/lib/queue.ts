@@ -15,14 +15,14 @@ export type { MedicationItem, MockVisit };
 export type Visit = MockVisit;
 
 /**
- * The doctor's queue, backed by Supabase.
+ * The doctor's queue, backed by Actian VectorAI DB.
  *
  * Replaces the in-memory `lib/mockQueue.ts` store, which could never show a
  * visit produced by the edge service on the other laptop — that is demo step 7.
  * Every function keeps the mock's exact signature and return shape, so the
  * queue/consult/prescribe screens did not change.
  *
- * With no Supabase configured this falls back to the mock, so `npm run dev`
+ * With no VectorAI DB configured this falls back to the mock, so `npm run dev`
  * still works on a laptop with no .env.local.
  */
 
@@ -102,9 +102,9 @@ export async function getVisit(visitId: string): Promise<Visit | null> {
 }
 
 /**
- * Compare-and-swap claim. The `.eq("status", "awaiting_doctor")` in the UPDATE
- * is the whole guarantee: Postgres applies it atomically, so the second doctor
- * updates zero rows and gets the 409. Reading-then-writing would race.
+ * Compare-and-swap-style claim. The VectorAI adapter applies the filters before
+ * writing the updated payload, so a visit already claimed by another doctor is
+ * left untouched.
  */
 export async function claimVisit(
   visitId: string,

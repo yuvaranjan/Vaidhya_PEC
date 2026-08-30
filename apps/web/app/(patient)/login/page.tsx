@@ -36,15 +36,15 @@ export default function PatientLoginPage() {
 
           <div>
             <label htmlFor="phone" className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
-              <Phone className="w-3.5 h-3.5 text-accent" /> Mobile Phone Number
+              <Phone className="w-3.5 h-3.5 text-accent" /> Mobile Phone or Patient ID
             </label>
             <input
-              type="tel"
+              type="text"
               id="phone"
               name="phone"
               required
               defaultValue="9000000001"
-              placeholder="e.g. 9000000001"
+              placeholder="e.g. 9000000001 or pat_001"
               className="w-full h-11 px-3.5 border border-border rounded-lg bg-background text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>

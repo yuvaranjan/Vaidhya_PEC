@@ -1,0 +1,29 @@
+FROM node:20-alpine AS builder
+WORKDIR /app
+
+# Copy configuration and manifests
+COPY package*.json ./
+COPY .npmrc* ./
+COPY packages ./packages
+COPY apps/web ./apps/web
+
+RUN npm install --ignore-scripts
+
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm --prefix apps/web run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages ./packages
+COPY --from=builder /app/apps/web ./apps/web
+
+EXPOSE 3000
+
+CMD ["npm", "--prefix", "apps/web", "run", "start"]

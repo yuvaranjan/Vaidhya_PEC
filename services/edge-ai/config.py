@@ -45,8 +45,10 @@ class Settings(BaseSettings):
     max_intake_turns: int = 6
 
     # --- data ---------------------------------------------------------
-    supabase_url: str = ""
-    supabase_service_key: str = ""
+    actian_vectorai_url: str = ""
+    actian_vectorai_token: str = ""
+    actian_vectorai_collection_prefix: str = "vaidhya_"
+    actian_vectorai_dimension: int = 8
     edge_db_path: str = "edge.db"
     audio_dir: str = "audio_tmp"
 

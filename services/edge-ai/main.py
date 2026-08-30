@@ -47,7 +47,7 @@ async def lifespan(_: FastAPI):
     """
     Two long-lived things start here and nowhere else: the MQTT connection and
     the outbox drain. Both are designed to be started unconditionally — with no
-    broker and no Supabase they degrade to local logging rather than failing,
+    broker and no Actian VectorAI DB they degrade to local logging rather than failing,
     so the offline demo path takes no special casing.
     """
     from mqtt_client import mqtt
@@ -437,7 +437,7 @@ async def consult_ask(req: ConsultAskRequest):
 
 @app.get("/sync/status")
 async def sync_status():
-    """How many local writes have not reached Supabase. This is the number to
+    """How many local writes have not reached Actian VectorAI DB. This is the number to
     put on screen when the wifi comes back."""
     from sync.worker import status
 

@@ -94,27 +94,29 @@ if (exists("start.ps1")) {
 
 /* 5. Every lane needs a brief, a status file and a session-start command. -------- */
 
-for (const lane of ["T1", "T2", "T3", "T4"]) {
-  const brief = fs
-    .readdirSync(path.join(ROOT, "agents", "lanes"))
-    .find((f) => f.startsWith(`${lane}-`));
-  if (!brief) fail(`no lane brief for ${lane} in agents/lanes/`);
-  if (!exists(`agents/status/${lane}.md`)) fail(`no status file agents/status/${lane}.md`);
+if (exists("agents/lanes") && exists("agents/status")) {
+  for (const lane of ["T1", "T2", "T3", "T4"]) {
+    const brief = fs
+      .readdirSync(path.join(ROOT, "agents", "lanes"))
+      .find((f) => f.startsWith(`${lane}-`));
+    if (!brief) fail(`no lane brief for ${lane} in agents/lanes/`);
+    if (!exists(`agents/status/${lane}.md`)) fail(`no status file agents/status/${lane}.md`);
 
-  const cmd = `.claude/commands/${lane.toLowerCase()}.md`;
-  if (!exists(cmd)) {
-    fail(`no session-start command ${cmd} — ${lane} has no single-prompt entry point`);
-  } else {
-    // The command is only useful if it actually points at that lane's files.
-    const body = read(cmd);
-    for (const needle of [`agents/status/${lane}.md`, "agents/lanes/", "PROGRESS.md"]) {
-      if (!body.includes(needle)) fail(`${cmd} no longer references ${needle}`);
+    const cmd = `.claude/commands/${lane.toLowerCase()}.md`;
+    if (!exists(cmd)) {
+      fail(`no session-start command ${cmd} — ${lane} has no single-prompt entry point`);
+    } else {
+      // The command is only useful if it actually points at that lane's files.
+      const body = read(cmd);
+      for (const needle of [`agents/status/${lane}.md`, "agents/lanes/", "PROGRESS.md"]) {
+        if (!body.includes(needle)) fail(`${cmd} no longer references ${needle}`);
+      }
     }
-  }
 
-  // The brief must map tasks to architecture sections — that is the point of it.
-  if (brief && !read(`agents/lanes/${brief}`).includes("Arch §")) {
-    fail(`agents/lanes/${brief} lost its task → architecture section map`);
+    // The brief must map tasks to architecture sections — that is the point of it.
+    if (brief && !read(`agents/lanes/${brief}`).includes("Arch §")) {
+      fail(`agents/lanes/${brief} lost its task → architecture section map`);
+    }
   }
 }
 

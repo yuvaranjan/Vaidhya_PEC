@@ -1,0 +1,12 @@
+{
+  "model": "openai/gpt-oss-20b",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Provide a 1-sentence public health summary for a fever spike in JSON format with keys 'summary' and 'recommendation'."
+    }
+  ],
+  "response_format": {
+    "type": "json_object"
+  }
+}

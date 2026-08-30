@@ -1,24 +1,20 @@
 """
-Outbox → Supabase sync worker (demo step 7 — the one that is hardest to fake).
+Outbox -> Actian VectorAI DB sync worker.
 
 Every edge write lands in the local `outbox` table and the request returns. This
-worker is the only thing that ever talks to Supabase. That ordering is the whole
+worker is the only thing that talks to Actian VectorAI DB. That ordering is the
 offline story: the clinic never waits on the network, and reconnecting is a
-drain, not a retry-storm.
-
-Upserts, not inserts. A row that was pushed and whose acknowledgement was lost
-gets pushed again on the next tick, and merge-duplicates makes that a no-op
-rather than a primary-key violation.
-
-Reference: architecture §3.3
+drain, not a retry storm.
 """
 
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import sqlite3
+import uuid
 
 import httpx
 
@@ -28,13 +24,18 @@ from voicebot.session import Session
 
 logger = logging.getLogger(__name__)
 
-# outbox.entity → the Supabase table it drains into. Order matters on a cold
-# flush: a reading cannot land before the visit it references exists.
+# Kept ordered for predictable sync and readable demo logs.
 ENTITY_ORDER = ("visits", "vitals_readings", "diagnostic_reports")
 
 SYNC_INTERVAL_SECONDS = 10
 
 _state: dict[str, object] = {"online": False, "last_flush": None, "pending": 0}
+
+_PK = {
+    "visits": "visit_id",
+    "vitals_readings": "reading_id",
+    "diagnostic_reports": "report_id",
+}
 
 
 def status() -> dict:
@@ -51,9 +52,7 @@ def pending_count() -> int:
 
 
 def enqueue(conn: sqlite3.Connection, entity: str, entity_id: str, payload: dict) -> None:
-    """Queue one row for sync. Takes an open connection so the caller keeps its
-    own transaction — the outbox write must commit with the data write or not
-    at all."""
+    """Queue one row for sync inside the caller's transaction."""
     conn.execute(
         "insert into outbox (entity, entity_id, payload, created_at) values (?,?,?,?)",
         (entity, entity_id, json.dumps(payload), now_iso()),
@@ -88,47 +87,97 @@ def record_visit(session: Session) -> None:
         enqueue(conn, "visits", session.visit_id, payload)
 
 
-async def _push(client: httpx.AsyncClient, table: str, rows: list[dict]) -> bool:
+def _collection_name(table: str) -> str:
+    settings = get_settings()
+    return f"{settings.actian_vectorai_collection_prefix}{table}"
+
+
+def _headers() -> dict[str, str]:
+    settings = get_settings()
+    headers = {"Content-Type": "application/json"}
+    if settings.actian_vectorai_token:
+        headers["Authorization"] = f"Bearer {settings.actian_vectorai_token}"
+    return headers
+
+
+def _hash_vector(seed: str) -> list[float]:
+    settings = get_settings()
+    digest = hashlib.sha256(seed.encode("utf-8")).digest()
+    return [
+        (digest[idx % len(digest)] / 255.0) * 2 - 1
+        for idx in range(settings.actian_vectorai_dimension)
+    ]
+
+
+def _point_id(table: str, row_id: str) -> str:
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"vaidhya:{table}:{row_id}"))
+
+
+async def _ensure_collection(client: httpx.AsyncClient, table: str) -> bool:
     settings = get_settings()
     try:
-        res = await client.post(
-            f"{settings.supabase_url}/rest/v1/{table}",
-            params={"on_conflict": _PK[table]},
-            headers={
-                "apikey": settings.supabase_service_key,
-                "Authorization": f"Bearer {settings.supabase_service_key}",
-                "Content-Type": "application/json",
-                "Prefer": "resolution=merge-duplicates,return=minimal",
+        res = await client.put(
+            f"{settings.actian_vectorai_url.rstrip('/')}/collections/{_collection_name(table)}",
+            headers=_headers(),
+            json={
+                "vectors": {
+                    "size": settings.actian_vectorai_dimension,
+                    "distance": "Cosine",
+                }
             },
-            json=rows,
+        )
+    except httpx.HTTPError as exc:
+        logger.info("sync: Actian unreachable while creating %s (%s)", table, exc.__class__.__name__)
+        return False
+
+    if res.status_code in {200, 409}:
+        return True
+
+    logger.error("sync: Actian rejected collection %s %s %s", table, res.status_code, res.text[:400])
+    return False
+
+
+async def _push(client: httpx.AsyncClient, table: str, rows: list[dict]) -> bool:
+    settings = get_settings()
+    if not await _ensure_collection(client, table):
+        return False
+
+    pk = _PK[table]
+    points = [
+        {
+            "id": _point_id(table, str(row[pk])),
+            "vector": _hash_vector(f"{table}:{row[pk]}"),
+            "payload": row,
+        }
+        for row in rows
+    ]
+
+    try:
+        res = await client.put(
+            f"{settings.actian_vectorai_url.rstrip('/')}/collections/{_collection_name(table)}/points",
+            params={"wait": "true"},
+            headers=_headers(),
+            json={"points": points},
         )
     except httpx.HTTPError as exc:
         logger.info("sync: %s unreachable (%s)", table, exc.__class__.__name__)
         return False
 
     if res.status_code >= 300:
-        # A 4xx is our bug, not the network's — log the body or it is invisible.
         logger.error("sync: %s rejected %s %s", table, res.status_code, res.text[:400])
         return False
     return True
 
 
-_PK = {
-    "visits": "visit_id",
-    "vitals_readings": "reading_id",
-    "diagnostic_reports": "report_id",
-}
-
-
 async def flush_outbox() -> dict:
     """
-    Drain everything unsynced. Safe to call concurrently with itself — the worst
-    case is one row pushed twice, and the upsert makes that harmless.
+    Drain everything unsynced. Safe to call concurrently with itself; the worst
+    case is one row pushed twice, and Actian point upsert makes that harmless.
     """
     settings = get_settings()
-    if not settings.supabase_url or not settings.supabase_service_key:
+    if not settings.actian_vectorai_url:
         _state["online"] = False
-        return {"synced": 0, "reason": "supabase not configured"}
+        return {"synced": 0, "reason": "Actian VectorAI DB not configured"}
 
     with sqlite3.connect(settings.edge_db_path) as conn:
         conn.row_factory = sqlite3.Row
@@ -143,8 +192,8 @@ async def flush_outbox() -> dict:
         return {"synced": 0}
 
     batches: dict[str, list[sqlite3.Row]] = {}
-    for r in rows:
-        batches.setdefault(r["entity"], []).append(r)
+    for row in rows:
+        batches.setdefault(row["entity"], []).append(row)
 
     synced_ids: list[int] = []
     async with httpx.AsyncClient(timeout=10.0) as client:
@@ -153,29 +202,20 @@ async def flush_outbox() -> dict:
             if not batch:
                 continue
 
-            # Postgres's ON CONFLICT DO UPDATE refuses to touch the same row
-            # twice inside one statement — a visit that got two enqueues
-            # before either flushed (e.g. created, then marked
-            # awaiting_doctor) crashed the whole batch, not just that visit.
-            # Rows are already selected oldest-first, so the last write per
-            # primary key wins here too; every id, including the earlier
-            # superseded ones, still gets marked synced below.
             by_pk: dict[str, dict] = {}
-            for r in batch:
-                pk = r["entity_id"]
-                data = json.loads(r["payload"])
+            for row in batch:
+                pk = row["entity_id"]
+                data = json.loads(row["payload"])
                 if pk in by_pk:
                     by_pk[pk].update(data)
                 else:
                     by_pk[pk] = data
 
-            payloads = [{k: v for k, v in p.items() if v is not None} for p in by_pk.values()]
+            payloads = [{k: v for k, v in payload.items() if v is not None} for payload in by_pk.values()]
 
             if await _push(client, entity, payloads):
-                synced_ids.extend(r["id"] for r in batch)
+                synced_ids.extend(row["id"] for row in batch)
             else:
-                # Stop at the first failure: later entities reference earlier
-                # ones, so pushing them now would just fail on the foreign key.
                 _state["online"] = False
                 break
         else:
@@ -195,11 +235,7 @@ async def flush_outbox() -> dict:
 
 
 async def sync_loop() -> None:
-    """
-    Ticks forever. When the wifi is out every tick fails cheaply and locally;
-    when it comes back, the next tick drains the backlog. That is the entire
-    reconnect behaviour — there is no reconnect event to listen for.
-    """
+    """Tick forever; failed ticks are cheap and local."""
     while True:
         try:
             await flush_outbox()

@@ -137,12 +137,17 @@ class SessionStore:
         self._load_sessions()
 
     def _init_db(self) -> None:
-        # .../services/edge-ai/voicebot/session.py → repo root is 3 levels up
-        schema = Path(__file__).resolve().parents[3] / "db" / "edge_schema.sql"
+        candidates = [
+            Path(__file__).resolve().parent.parent.parent / "db" / "edge_schema.sql",
+            Path(__file__).resolve().parent.parent / "db" / "edge_schema.sql",
+            Path("/app/db/edge_schema.sql"),
+            Path("db/edge_schema.sql"),
+        ]
+        schema = next((p for p in candidates if p.exists()), None)
         with sqlite3.connect(self._db_path, timeout=5) as conn:
             conn.execute('PRAGMA journal_mode=WAL')
             conn.execute('PRAGMA busy_timeout=5000')
-            if schema.exists():
+            if schema and schema.exists():
                 conn.executescript(schema.read_text(encoding="utf-8"))
 
     def _load_sessions(self) -> None:

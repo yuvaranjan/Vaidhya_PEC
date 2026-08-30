@@ -57,8 +57,8 @@ if ! $WEB_ONLY && [ ! -f services/edge-ai/.env ]; then
   ok "created services/edge-ai/.env"
 fi
 
-grep -q '^SUPABASE_URL=.\+' apps/web/.env.local 2>/dev/null ||
-  warn "SUPABASE_URL is empty — anything touching the database will fail. See SETUP.md."
+grep -q '^ACTIAN_VECTORAI_URL=.\+' apps/web/.env.local 2>/dev/null ||
+  warn "ACTIAN_VECTORAI_URL is empty - anything touching the database will fail. See SETUP.md."
 
 if [ ! -d node_modules ]; then
   echo "  installing npm packages (first run)..."
